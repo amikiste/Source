@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Global City Weather</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+      background: #e8eaf0;
+    }
+
+    /* ── Sidebar ─────────────────────────────────────────── */
+    #sidebar {
+      width: 268px;
+      min-width: 268px;
+      background: #fff;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 2px 0 20px rgba(0,0,0,.09);
+      z-index: 1000;
+    }
+
+    .sb-head {
+      padding: 18px 16px 12px;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    .sb-head h1 {
+      font-size: 14px;
+      font-weight: 700;
+      color: #111;
+      letter-spacing: -.2px;
+    }
+
+    .sb-head p {
+      font-size: 11px;
+      color: #bbb;
+      margin-top: 3px;
+    }
+
+    #progress-bar-wrap {
+      height: 3px;
+      background: #f0f0f0;
+    }
+
+    #progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, #4285f4, #34a853);
+      width: 0%;
+      transition: width .25s ease, background-color .6s ease;
+    }
+
+    .sb-search {
+      padding: 10px 12px;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    .sb-search input {
+      width: 100%;
+      padding: 7px 10px;
+      font-size: 12px;
+      border: 1px solid #e8e8e8;
+      border-radius: 6px;
+      background: #f9f9f9;
+      outline: none;
+      color: #333;
+      transition: border-color .15s, background .15s;
+    }
+
+    .sb-search input:focus {
+      border-color: #4285f4;
+      background: #fff;
+    }
+
+    #country-list {
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    #country-list::-webkit-scrollbar { width: 4px; }
+    #country-list::-webkit-scrollbar-thumb { background: #e0e0e0; border-radius: 2px; }
+
+    .c-item { border-bottom: 1px solid #f5f5f5; }
+
+    .c-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 14px;
+      cursor: pointer;
+      user-select: none;
+      transition: background .12s;
+    }
+
+    .c-head:hover { background: #f7f9ff; }
+
+    .c-flag { font-size: 15px; line-height: 1; flex-shrink: 0; }
+
+    .c-name {
+      flex: 1;
+      font-size: 12px;
+      font-weight: 600;
+      color: #222;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .c-rank {
+      font-size: 10px;
+      color: #ccc;
+      flex-shrink: 0;
+    }
+
+    .c-chevron {
+      font-size: 8px;
+      color: #ccc;
+      transition: transform .2s;
+      flex-shrink: 0;
+    }
+
+    .c-chevron.open { transform: rotate(90deg); }
+
+    .c-cities { display: none; background: #fafafa; }
+    .c-cities.open { display: block; }
+
+    .city-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px 6px 42px;
+      cursor: pointer;
+      border-left: 3px solid transparent;
+      transition: all .12s;
+    }
+
+    .city-row:hover { background: #f0f4ff; border-left-color: #4285f4; }
+    .city-row.active { background: #e8f0fe; border-left-color: #4285f4; }
+
+    .city-icon { font-size: 12px; flex-shrink: 0; }
+
+    .city-label {
+      flex: 1;
+      font-size: 11.5px;
+      color: #444;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .city-temp {
+      font-size: 12px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    /* ── Map area ─────────────────────────────────────────── */
+    #map-wrap {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+
+    #map {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* ── Loading overlay ──────────────────────────────────── */
+    #overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(248,249,252,.94);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      gap: 14px;
+      transition: opacity .4s;
+    }
+
+    #overlay.fade-out { opacity: 0; pointer-events: none; }
+
+    .spin {
+      width: 36px;
+      height: 36px;
+      border: 3px solid #e0e0e0;
+      border-top-color: #4285f4;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    #ov-text { font-size: 13px; color: #555; font-weight: 500; }
+    #ov-sub  { font-size: 11px; color: #bbb; }
+
+    /* ── Weather markers ──────────────────────────────────── */
+    .w-pin {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 800;
+      color: #fff;
+      border: 2.5px solid rgba(255,255,255,.88);
+      box-shadow: 0 2px 10px rgba(0,0,0,.24);
+      cursor: pointer;
+      transition: transform .15s;
+      letter-spacing: -.3px;
+    }
+
+    .w-pin:hover { transform: scale(1.2); }
+
+    /* ── Popups ───────────────────────────────────────────── */
+    .leaflet-popup-content-wrapper {
+      border-radius: 14px !important;
+      padding: 0 !important;
+      overflow: hidden;
+      box-shadow: 0 8px 32px rgba(0,0,0,.13) !important;
+    }
+
+    .leaflet-popup-content {
+      margin: 0 !important;
+      width: 208px !important;
+    }
+
+    .leaflet-popup-tip-container { display: none; }
+
+    .pop-head {
+      padding: 14px 15px;
+      color: #fff;
+    }
+
+    .pop-city { font-size: 15px; font-weight: 700; }
+    .pop-country { font-size: 11px; opacity: .82; margin-top: 2px; }
+
+    .pop-body { padding: 12px 15px; background: #fff; }
+
+    .pop-temp {
+      font-size: 40px;
+      font-weight: 800;
+      color: #111;
+      line-height: 1;
+    }
+
+    .pop-cond {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 12px;
+      color: #777;
+      margin-top: 6px;
+    }
+
+    .pop-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px 8px;
+      margin-top: 13px;
+      padding-top: 12px;
+      border-top: 1px solid #f0f0f0;
+    }
+
+    .pop-stat label {
+      display: block;
+      font-size: 10px;
+      color: #aaa;
+      text-transform: uppercase;
+      letter-spacing: .4px;
+    }
+
+    .pop-stat span {
+      font-size: 12.5px;
+      font-weight: 600;
+      color: #222;
+    }
+
+    /* ── Map controls ─────────────────────────────────────── */
+    #btn-reset {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      z-index: 500;
+      padding: 7px 13px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #333;
+      background: #fff;
+      border: none;
+      border-radius: 8px;
+      box-shadow: 0 2px 12px rgba(0,0,0,.12);
+      cursor: pointer;
+      transition: background .12s;
+    }
+
+    #btn-reset:hover { background: #f5f6fa; }
+
+    /* ── Legend ───────────────────────────────────────────── */
+    #legend {
+      position: absolute;
+      bottom: 70px;
+      right: 12px;
+      z-index: 500;
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 2px 12px rgba(0,0,0,.1);
+      padding: 11px 13px;
+    }
+
+    #legend h3 {
+      font-size: 10px;
+      font-weight: 700;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      margin-bottom: 8px;
+    }
+
+    .leg-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: #666;
+      margin-bottom: 4px;
+    }
+
+    .leg-row:last-child { margin-bottom: 0; }
+
+    .leg-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    /* ── Stats bar ────────────────────────────────────────── */
+    #stats {
+      position: absolute;
+      bottom: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 500;
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 2px 12px rgba(0,0,0,.1);
+      padding: 10px 18px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      white-space: nowrap;
+    }
+
+    .stat-col { text-align: center; }
+
+    .stat-val {
+      font-size: 15px;
+      font-weight: 700;
+      color: #111;
+    }
+
+    .stat-lbl {
+      font-size: 9.5px;
+      color: #bbb;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      margin-top: 2px;
+    }
+
+    .stat-div {
+      width: 1px;
+      height: 28px;
+      background: #f0f0f0;
+    }
+
+    /* ── Mobile ───────────────────────────────────────────── */
+    @media (max-width: 640px) {
+      #sidebar { display: none; }
+      #stats { font-size: 11px; padding: 8px 12px; gap: 10px; }
+      .stat-val { font-size: 13px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Sidebar ──────────────────────────────────────────────────────── -->
+<div id="sidebar">
+  <div class="sb-head">
+    <h1>🌍 Global City Weather</h1>
+    <p>Top 3 cities · 25 most populous countries</p>
+  </div>
+  <div id="progress-bar-wrap"><div id="progress-bar"></div></div>
+  <div class="sb-search">
+    <input id="search" type="text" placeholder="Search city or country…" autocomplete="off" />
+  </div>
+  <div id="country-list"></div>
+</div>
+
+<!-- ── Map ──────────────────────────────────────────────────────────── -->
+<div id="map-wrap">
+  <div id="map"></div>
+
+  <button id="btn-reset">🌍 World view</button>
+
+  <div id="legend">
+    <h3>Temperature</h3>
+    <div class="leg-row"><div class="leg-dot" style="background:#7EC8E3"></div>Below 0°C</div>
+    <div class="leg-row"><div class="leg-dot" style="background:#90CAF9"></div>0 – 10°C</div>
+    <div class="leg-row"><div class="leg-dot" style="background:#81C995"></div>10 – 20°C</div>
+    <div class="leg-row"><div class="leg-dot" style="background:#FFD54F"></div>20 – 30°C</div>
+    <div class="leg-row"><div class="leg-dot" style="background:#FF8A65"></div>30 – 40°C</div>
+    <div class="leg-row"><div class="leg-dot" style="background:#E53935"></div>Above 40°C</div>
+  </div>
+
+  <div id="stats">
+    <div class="stat-col">
+      <div class="stat-val" id="s-hot-city">–</div>
+      <div class="stat-lbl">Hottest city</div>
+    </div>
+    <div class="stat-col">
+      <div class="stat-val" id="s-hot-temp">–</div>
+      <div class="stat-lbl">Temperature</div>
+    </div>
+    <div class="stat-div"></div>
+    <div class="stat-col">
+      <div class="stat-val" id="s-avg">–</div>
+      <div class="stat-lbl">Global avg</div>
+    </div>
+    <div class="stat-div"></div>
+    <div class="stat-col">
+      <div class="stat-val" id="s-cold-temp">–</div>
+      <div class="stat-lbl">Temperature</div>
+    </div>
+    <div class="stat-col">
+      <div class="stat-val" id="s-cold-city">–</div>
+      <div class="stat-lbl">Coldest city</div>
+    </div>
+  </div>
+
+  <!-- Loading overlay -->
+  <div id="overlay">
+    <div class="spin"></div>
+    <div id="ov-text">Fetching live weather…</div>
+    <div id="ov-sub">0 / 75 cities</div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ── City data ─────────────────────────────────────────────────────────
+// Top 3 cities by population for the 25 most populous countries (2024)
+const COUNTRIES = [
+  { name: 'India',          flag: '🇮🇳', rank: 1,
+    cities: [{n:'Mumbai',        lat:19.076,  lon:72.878},
+             {n:'Delhi',         lat:28.704,  lon:77.103},
+             {n:'Bangalore',     lat:12.972,  lon:77.595}]},
+  { name: 'China',          flag: '🇨🇳', rank: 2,
+    cities: [{n:'Shanghai',      lat:31.230,  lon:121.474},
+             {n:'Beijing',       lat:39.904,  lon:116.407},
+             {n:'Guangzhou',     lat:23.129,  lon:113.264}]},
+  { name: 'United States',  flag: '🇺🇸', rank: 3,
+    cities: [{n:'New York',      lat:40.713,  lon:-74.006},
+             {n:'Los Angeles',   lat:34.052,  lon:-118.244},
+             {n:'Chicago',       lat:41.878,  lon:-87.630}]},
+  { name: 'Indonesia',      flag: '🇮🇩', rank: 4,
+    cities: [{n:'Jakarta',       lat:-6.209,  lon:106.846},
+             {n:'Surabaya',      lat:-7.257,  lon:112.752},
+             {n:'Bandung',       lat:-6.917,  lon:107.619}]},
+  { name: 'Pakistan',       flag: '🇵🇰', rank: 5,
+    cities: [{n:'Karachi',       lat:24.861,  lon:67.001},
+             {n:'Lahore',        lat:31.550,  lon:74.344},
+             {n:'Faisalabad',    lat:31.450,  lon:73.135}]},
+  { name: 'Nigeria',        flag: '🇳🇬', rank: 6,
+    cities: [{n:'Lagos',         lat:6.524,   lon:3.379},
+             {n:'Kano',          lat:12.002,  lon:8.592},
+             {n:'Ibadan',        lat:7.378,   lon:3.947}]},
+  { name: 'Brazil',         flag: '🇧🇷', rank: 7,
+    cities: [{n:'São Paulo',     lat:-23.550, lon:-46.633},
+             {n:'Rio de Janeiro',lat:-22.907, lon:-43.173},
+             {n:'Brasília',      lat:-15.780, lon:-47.930}]},
+  { name: 'Bangladesh',     flag: '🇧🇩', rank: 8,
+    cities: [{n:'Dhaka',         lat:23.810,  lon:90.413},
+             {n:'Chittagong',    lat:22.357,  lon:91.783},
+             {n:'Khulna',        lat:22.846,  lon:89.540}]},
+  { name: 'Ethiopia',       flag: '🇪🇹', rank: 9,
+    cities: [{n:'Addis Ababa',   lat:9.032,   lon:38.747},
+             {n:'Dire Dawa',     lat:9.594,   lon:41.861},
+             {n:'Mekelle',       lat:13.497,  lon:39.475}]},
+  { name: 'Russia',         flag: '🇷🇺', rank: 10,
+    cities: [{n:'Moscow',        lat:55.756,  lon:37.617},
+             {n:'St. Petersburg',lat:59.931,  lon:30.361},
+             {n:'Novosibirsk',   lat:54.989,  lon:82.921}]},
+  { name: 'Mexico',         flag: '🇲🇽', rank: 11,
+    cities: [{n:'Mexico City',   lat:19.433,  lon:-99.133},
+             {n:'Guadalajara',   lat:20.660,  lon:-103.350},
+             {n:'Monterrey',     lat:25.687,  lon:-100.316}]},
+  { name: 'Philippines',    flag: '🇵🇭', rank: 12,
+    cities: [{n:'Manila',        lat:14.600,  lon:120.984},
+             {n:'Quezon City',   lat:14.676,  lon:121.044},
+             {n:'Cebu City',     lat:10.316,  lon:123.885}]},
+  { name: 'Egypt',          flag: '🇪🇬', rank: 13,
+    cities: [{n:'Cairo',         lat:30.044,  lon:31.236},
+             {n:'Alexandria',    lat:31.200,  lon:29.919},
+             {n:'Giza',          lat:30.013,  lon:31.209}]},
+  { name: 'DR Congo',       flag: '🇨🇩', rank: 14,
+    cities: [{n:'Kinshasa',      lat:-4.442,  lon:15.266},
+             {n:'Lubumbashi',    lat:-11.661, lon:27.479},
+             {n:'Mbuji-Mayi',    lat:-6.150,  lon:23.600}]},
+  { name: 'Vietnam',        flag: '🇻🇳', rank: 15,
+    cities: [{n:'Ho Chi Minh City',lat:10.823,lon:106.630},
+             {n:'Hanoi',         lat:21.028,  lon:105.854},
+             {n:'Da Nang',       lat:16.054,  lon:108.202}]},
+  { name: 'Iran',           flag: '🇮🇷', rank: 16,
+    cities: [{n:'Tehran',        lat:35.689,  lon:51.389},
+             {n:'Mashhad',       lat:36.260,  lon:59.617},
+             {n:'Isfahan',       lat:32.655,  lon:51.668}]},
+  { name: 'Turkey',         flag: '🇹🇷', rank: 17,
+    cities: [{n:'Istanbul',      lat:41.008,  lon:28.978},
+             {n:'Ankara',        lat:39.933,  lon:32.860},
+             {n:'Izmir',         lat:38.419,  lon:27.129}]},
+  { name: 'Germany',        flag: '🇩🇪', rank: 18,
+    cities: [{n:'Berlin',        lat:52.520,  lon:13.405},
+             {n:'Hamburg',       lat:53.575,  lon:10.015},
+             {n:'Munich',        lat:48.135,  lon:11.582}]},
+  { name: 'Thailand',       flag: '🇹🇭', rank: 19,
+    cities: [{n:'Bangkok',       lat:13.756,  lon:100.502},
+             {n:'Chiang Mai',    lat:18.788,  lon:98.985},
+             {n:'Nakhon Ratchasima',lat:14.973,lon:102.102}]},
+  { name: 'United Kingdom', flag: '🇬🇧', rank: 20,
+    cities: [{n:'London',        lat:51.507,  lon:-0.128},
+             {n:'Birmingham',    lat:52.486,  lon:-1.890},
+             {n:'Manchester',    lat:53.481,  lon:-2.243}]},
+  { name: 'Tanzania',       flag: '🇹🇿', rank: 21,
+    cities: [{n:'Dar es Salaam', lat:-6.792,  lon:39.208},
+             {n:'Mwanza',        lat:-2.517,  lon:32.900},
+             {n:'Arusha',        lat:-3.387,  lon:36.683}]},
+  { name: 'Kenya',          flag: '🇰🇪', rank: 22,
+    cities: [{n:'Nairobi',       lat:-1.292,  lon:36.822},
+             {n:'Mombasa',       lat:-4.043,  lon:39.668},
+             {n:'Kisumu',        lat:-0.102,  lon:34.762}]},
+  { name: 'South Africa',   flag: '🇿🇦', rank: 23,
+    cities: [{n:'Johannesburg',  lat:-26.204, lon:28.047},
+             {n:'Cape Town',     lat:-33.925, lon:18.424},
+             {n:'Durban',        lat:-29.859, lon:31.022}]},
+  { name: 'Colombia',       flag: '🇨🇴', rank: 24,
+    cities: [{n:'Bogotá',        lat:4.711,   lon:-74.072},
+             {n:'Medellín',      lat:6.244,   lon:-75.581},
+             {n:'Cali',          lat:3.452,   lon:-76.532}]},
+  { name: 'Argentina',      flag: '🇦🇷', rank: 25,
+    cities: [{n:'Buenos Aires',  lat:-34.604, lon:-58.382},
+             {n:'Córdoba',       lat:-31.417, lon:-64.183},
+             {n:'Rosario',       lat:-32.959, lon:-60.693}]},
+];
+
+// WMO weather code → description + emoji
+const WMO = {
+   0: {d:'Clear sky',              e:'☀️'},
+   1: {d:'Mainly clear',           e:'🌤️'},
+   2: {d:'Partly cloudy',          e:'⛅'},
+   3: {d:'Overcast',               e:'☁️'},
+  45: {d:'Foggy',                  e:'🌫️'},
+  48: {d:'Icy fog',                e:'🌫️'},
+  51: {d:'Light drizzle',          e:'🌦️'},
+  53: {d:'Drizzle',                e:'🌦️'},
+  55: {d:'Heavy drizzle',          e:'🌧️'},
+  61: {d:'Light rain',             e:'🌧️'},
+  63: {d:'Rain',                   e:'🌧️'},
+  65: {d:'Heavy rain',             e:'🌧️'},
+  71: {d:'Light snow',             e:'🌨️'},
+  73: {d:'Snow',                   e:'❄️'},
+  75: {d:'Heavy snow',             e:'❄️'},
+  77: {d:'Snow grains',            e:'🌨️'},
+  80: {d:'Light showers',          e:'🌦️'},
+  81: {d:'Showers',                e:'🌧️'},
+  82: {d:'Heavy showers',          e:'⛈️'},
+  85: {d:'Snow showers',           e:'🌨️'},
+  86: {d:'Heavy snow showers',     e:'❄️'},
+  95: {d:'Thunderstorm',           e:'⛈️'},
+  96: {d:'Thunderstorm w/ hail',   e:'⛈️'},
+  99: {d:'Severe thunderstorm',    e:'⛈️'},
+};
+
+// ── Helpers ───────────────────────────────────────────────────────────
+function tempColor(t) {
+  if (t <  0) return '#7EC8E3';
+  if (t < 10) return '#90CAF9';
+  if (t < 20) return '#81C995';
+  if (t < 30) return '#FFD54F';
+  if (t < 40) return '#FF8A65';
+  return '#E53935';
+}
+
+function wmo(code) { return WMO[code] || {d:'Unknown', e:'🌡️'}; }
+
+// ── Map ───────────────────────────────────────────────────────────────
+const map = L.map('map', { center: [20, 10], zoom: 2, zoomControl: true });
+
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+  subdomains: 'abcd',
+  maxZoom: 19,
+}).addTo(map);
+
+// ── State ─────────────────────────────────────────────────────────────
+const loaded  = {};   // key → { weather, marker, city, country }
+let loadedCount = 0;
+const TOTAL   = COUNTRIES.reduce((s, c) => s + c.cities.length, 0);
+
+// ── Weather fetch ─────────────────────────────────────────────────────
+async function fetchWeather(lat, lon) {
+  const url = `https://api.open-meteo.com/v1/forecast`
+    + `?latitude=${lat}&longitude=${lon}`
+    + `&current=temperature_2m,apparent_temperature,weathercode,windspeed_10m,relative_humidity_2m`
+    + `&timezone=auto`;
+  const r = await fetch(url);
+  const d = await r.json();
+  return d.current;
+}
+
+// ── Add map marker ────────────────────────────────────────────────────
+function addMarker(city, country, wx) {
+  const t   = Math.round(wx.temperature_2m);
+  const col = tempColor(t);
+  const w   = wmo(wx.weathercode);
+
+  const icon = L.divIcon({
+    className: '',
+    html: `<div class="w-pin" style="background:${col}">${t}°</div>`,
+    iconSize:    [40, 40],
+    iconAnchor:  [20, 20],
+    popupAnchor: [0, -24],
+  });
+
+  const mk = L.marker([city.lat, city.lon], { icon }).addTo(map);
+  mk.bindTooltip(city.n, { direction: 'top', offset: [0, -4] });
+
+  mk.bindPopup(`
+    <div class="pop-head" style="background:${col}">
+      <div class="pop-city">${city.n}</div>
+      <div class="pop-country">${country.flag} ${country.name}</div>
+    </div>
+    <div class="pop-body">
+      <div class="pop-temp">${t}°C</div>
+      <div class="pop-cond">${w.e} ${w.d}</div>
+      <div class="pop-grid">
+        <div class="pop-stat"><label>Feels like</label><span>${Math.round(wx.apparent_temperature)}°C</span></div>
+        <div class="pop-stat"><label>Humidity</label><span>${wx.relative_humidity_2m}%</span></div>
+        <div class="pop-stat"><label>Wind</label><span>${Math.round(wx.windspeed_10m)} km/h</span></div>
+        <div class="pop-stat"><label>Country rank</label><span>#${country.rank}</span></div>
+      </div>
+    </div>
+  `, { maxWidth: 210 });
+
+  return mk;
+}
+
+// ── Build/refresh sidebar ─────────────────────────────────────────────
+function buildSidebar() {
+  const list = document.getElementById('country-list');
+  // Preserve open/active state
+  const openKeys   = new Set([...list.querySelectorAll('.c-cities.open')].map(el => el.dataset.ck));
+  const activeKey  = list.querySelector('.city-row.active')?.dataset.cityKey;
+
+  list.innerHTML = '';
+
+  COUNTRIES.forEach(country => {
+    const ci = document.createElement('div');
+    ci.className = 'c-item';
+
+    const head = document.createElement('div');
+    head.className = 'c-head';
+    head.innerHTML = `
+      <span class="c-flag">${country.flag}</span>
+      <span class="c-name">${country.name}</span>
+      <span class="c-rank">#${country.rank}</span>
+      <span class="c-chevron">▶</span>
+    `;
+
+    const cityWrap = document.createElement('div');
+    cityWrap.className = 'c-cities';
+    cityWrap.dataset.ck = country.name;
+    if (openKeys.has(country.name)) {
+      cityWrap.classList.add('open');
+      head.querySelector('.c-chevron').classList.add('open');
+    }
+
+    country.cities.forEach(city => {
+      const key  = `${country.name}:${city.n}`;
+      const data = loaded[key];
+      const row  = document.createElement('div');
+      row.className  = 'city-row' + (key === activeKey ? ' active' : '');
+      row.dataset.cityKey = key;
+
+      if (data) {
+        const t   = Math.round(data.weather.temperature_2m);
+        const col = tempColor(t);
+        const w   = wmo(data.weather.weathercode);
+        row.innerHTML = `
+          <span class="city-icon">${w.e}</span>
+          <span class="city-label">${city.n}</span>
+          <span class="city-temp" style="color:${col}">${t}°</span>
+        `;
+        row.addEventListener('click', () => {
+          map.flyTo([city.lat, city.lon], 10, { duration: 1.2 });
+          setTimeout(() => data.marker.openPopup(), 1300);
+          document.querySelectorAll('.city-row').forEach(r => r.classList.remove('active'));
+          row.classList.add('active');
+        });
+      } else {
+        row.innerHTML = `
+          <span class="city-icon">⏳</span>
+          <span class="city-label">${city.n}</span>
+          <span class="city-temp" style="color:#ccc">–</span>
+        `;
+      }
+
+      cityWrap.appendChild(row);
+    });
+
+    head.addEventListener('click', () => {
+      const isOpen = cityWrap.classList.toggle('open');
+      head.querySelector('.c-chevron').classList.toggle('open', isOpen);
+      if (isOpen) {
+        const lats = country.cities.map(c => c.lat);
+        const lons = country.cities.map(c => c.lon);
+        map.flyTo(
+          [lats.reduce((a,b) => a+b,0)/lats.length, lons.reduce((a,b) => a+b,0)/lons.length],
+          4, { duration: 1.1 }
+        );
+      }
+    });
+
+    ci.appendChild(head);
+    ci.appendChild(cityWrap);
+    list.appendChild(ci);
+  });
+}
+
+// ── Stats bar ─────────────────────────────────────────────────────────
+function updateStats() {
+  const vals = Object.values(loaded).map(d => ({
+    name: d.city.n,
+    temp: d.weather.temperature_2m,
+  }));
+  if (!vals.length) return;
+
+  const hot  = vals.reduce((a,b) => b.temp > a.temp ? b : a);
+  const cold = vals.reduce((a,b) => b.temp < a.temp ? b : a);
+  const avg  = vals.reduce((s,c) => s + c.temp, 0) / vals.length;
+
+  document.getElementById('s-hot-city').textContent  = hot.name;
+  document.getElementById('s-hot-temp').textContent  = `${Math.round(hot.temp)}°C`;
+  document.getElementById('s-cold-city').textContent = cold.name;
+  document.getElementById('s-cold-temp').textContent = `${Math.round(cold.temp)}°C`;
+  document.getElementById('s-avg').textContent        = `${avg.toFixed(1)}°C`;
+}
+
+// ── Search ────────────────────────────────────────────────────────────
+document.getElementById('search').addEventListener('input', e => {
+  const q = e.target.value.toLowerCase().trim();
+
+  document.querySelectorAll('.c-item').forEach(ci => {
+    const cn = ci.querySelector('.c-name').textContent.toLowerCase();
+    let any = false;
+
+    ci.querySelectorAll('.city-row').forEach(row => {
+      const cityName = row.dataset.cityKey.split(':')[1].toLowerCase();
+      const match = !q || cityName.includes(q) || cn.includes(q);
+      row.style.display = match ? '' : 'none';
+      if (match) any = true;
+    });
+
+    ci.style.display = any ? '' : 'none';
+
+    if (q && any) {
+      ci.querySelector('.c-cities').classList.add('open');
+      ci.querySelector('.c-chevron').classList.add('open');
+    }
+  });
+});
+
+// ── Reset view ────────────────────────────────────────────────────────
+document.getElementById('btn-reset').addEventListener('click', () => {
+  map.flyTo([20, 10], 2, { duration: 1.5 });
+  document.querySelectorAll('.city-row').forEach(r => r.classList.remove('active'));
+});
+
+// ── Main ──────────────────────────────────────────────────────────────
+async function init() {
+  const tasks = [];
+  COUNTRIES.forEach(country => {
+    country.cities.forEach(city => tasks.push({ country, city }));
+  });
+
+  const BATCH = 8;
+  const pb    = document.getElementById('progress-bar');
+  const ovSub = document.getElementById('ov-sub');
+  let firstBatchDone = false;
+
+  for (let i = 0; i < tasks.length; i += BATCH) {
+    const batch = tasks.slice(i, i + BATCH);
+
+    await Promise.all(batch.map(async ({ country, city }) => {
+      try {
+        const wx     = await fetchWeather(city.lat, city.lon);
+        const key    = `${country.name}:${city.n}`;
+        const marker = addMarker(city, country, wx);
+        loaded[key]  = { weather: wx, marker, city, country };
+      } catch (_) { /* skip city on error */ }
+
+      loadedCount++;
+      pb.style.width = `${(loadedCount / TOTAL) * 100}%`;
+      ovSub.textContent = `${loadedCount} / ${TOTAL} cities`;
+    }));
+
+    buildSidebar();
+    updateStats();
+
+    // Reveal map after first batch so user can interact while rest load
+    if (!firstBatchDone) {
+      firstBatchDone = true;
+      const ov = document.getElementById('overlay');
+      ov.classList.add('fade-out');
+      setTimeout(() => { ov.style.display = 'none'; }, 400);
+    }
+
+    if (i + BATCH < tasks.length) {
+      await new Promise(r => setTimeout(r, 60));
+    }
+  }
+
+  // Finalize progress bar
+  pb.style.background = '#34a853';
+}
+
+init();
+</script>
+</body>
+</html>
