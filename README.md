@@ -19,6 +19,7 @@ It offers these key features:
 3. pip install llama-index llama-index-embeddings-fireworks
 4. pip install docx2txt
 5. pip install torch transformers python-pptx Pillow
+6. pip install python-dotenv
 
 #################################
 #Bug Resolution

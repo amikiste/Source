@@ -72,7 +72,7 @@ def query_rag(query_str):
     return str(response)
 
 # Provide Instructions to the two Agents we are building
-context_variables = {}
+# context_variables = {} comment out because this line overwrites previous settings 
 
 def triage_agent_instructions(context_variables):
     name = context_variables.get("name", "User")

@@ -59,7 +59,7 @@ Now, to download, configure, and run the application, all one needs to do is:
 1. Setup Anaconda and install required python packages
 2. Fork & clone the [github repository](https://github.com/amikiste/Source) containing Charlie's agent code
 3. Register, obtain API keys for [OpenAI](https://openai.com) and [Tavily](https://app.tavily.com/home), and purchase API tokens for OpenAI  
-4. Fix the Swarm Result object defect by editing Swarm's `__init__.py` file
+4. Fix the Swarm Result object defect by editing Swarm's `__init__.py` file (see below for help finding the file)
 5. Copy .env.template to .env and edit the content
 6. Copy some PDF files into the PDF source directory that is listed in your .env file so they can be converted to an Index
 7. Load an IDE within Anaconda, and select your IDE's version of "run python file in Terminal"
@@ -67,3 +67,11 @@ Now, to download, configure, and run the application, all one needs to do is:
 If one edits the environment variables, loads the script in an IDE from the Anaconda Navigator, and runs it in a terminal session, it will generate output that looks like this:
 
 ![](./images/configuringRAGAgent-01.png)
+
+## Finding the Install Location of Swarm
+
+To complete step 4 above, one needs to know the location of Swarm on the local computer. There are at least two techniques for this. 
+First, from a terminal window, `pip <packagename> show` will print descriptive information about a package, including the directory into which the package was installed. Second, within a Python script one can import a package, and then use `print()` as follows:
+
+    import swarm
+    print(swarm.__file__)
