@@ -1,7 +1,7 @@
 # Product Requirements Document: Personal AI Skills Suite
 **Owner:** Charlie Fleet
 **Date:** August 26, 2026
-**Status:** Draft v2.0 — supersedes *Career Application Engine PRD v1.0* (Aug 4, 2026) by generalizing it into a multi-skill suite
+**Status:** Draft v2.1 — supersedes *Career Application Engine PRD v1.0* (Aug 4, 2026) by generalizing it into a multi-skill suite. v2.1 change: the direct-edit (native Excel) co-ownership requirement is withdrawn; the career store becomes agent-maintained markdown (§9).
 **Lineage:** Reconciles three inputs: (1) the Career Application Engine PRD v1.0, (2) the compose-contract architecture of [remix-yourself-starter](https://github.com/remixrevco/remix-yourself-starter/), and (3) the mature single-skill patterns of [job-sniper](https://github.com/jugbandman/job-sniper) (setup interview, depth tiers, headless background runs, model routing).
 
 ---
@@ -25,7 +25,7 @@ This PRD merges all three. The Career Application Engine becomes the flagship sk
 ## 3. Goals and Non-Goals
 
 **Goals**
-1. **Provider-independent memory.** All personal context lives as plain files (markdown + CSV) in the repo. No skill may depend on provider-side memory. Switching AI providers loses nothing.
+1. **Provider-independent memory.** All personal context lives as plain markdown files in the repo. The agent maintains them on Charlie's behalf; no skill may depend on provider-side memory. Switching AI providers loses nothing.
 2. **Multi-runtime invocation.** Every skill is a provider-neutral prompt file; thin adapters expose it to Claude Code (slash commands), and an `AGENTS.md` entry point makes the repo legible to any other agent (Cursor, Codex CLI, Gemini CLI, etc.).
 3. **Composability.** Skills follow the compose contract: read shared memory freely, write narrowly to owned surfaces, append never clobber, self-seed if missing. New skills join by following the contract; nothing is wired by hand.
 4. **Background operation.** Designated skills run unattended on a schedule (cron/launchd + headless `claude -p`). Platform lock-in for the *scheduler* is acceptable; the skills themselves stay portable.
@@ -52,16 +52,16 @@ Single user: Charlie. Privacy posture: private repository; contact data never le
 |---|---|---|
 | System of record | Private GitHub repository | Cloud, multi-endpoint, versioned; kills asset leakage structurally (v1.0, unchanged) |
 | Memory model | Compose contract v1.1: `context/` + `people/` + `memory/`, plain markdown | Provider-independent, human-editable, git-diffable; proven cross-skill sharing model (remix) |
-| Career data store | `store/*.csv` — one CSV per table, cross-keyed; optional generated `career.xlsx` view | **Changed from v1.0** (xlsx canonical → CSV canonical); see §9 rationale |
+| Career data store | `store/*.md` — agent-maintained markdown, cross-keyed by stable IDs | **Changed from v1.0** (xlsx → markdown); the direct-edit requirement that demanded a spreadsheet is withdrawn; see §9 |
 | Skills | `skills/<name>/SKILL.md` — provider-neutral markdown prompts | The prompt is the product (job-sniper); readable, editable, forkable |
 | Primary orchestrator | Claude Code, via `.claude/commands/` adapters | Strongest tool for long autonomous file work (v1.0, unchanged) |
 | Other-agent entry | `AGENTS.md` at repo root + `CLAUDE.md` pointing to it | Emerging cross-provider convention; any agent opening the repo learns the contract and skill index |
 | Background runs | cron (Linux) / launchd (macOS) → shell wrapper → `claude -p` headless, cheap model | Job-sniper's proven pattern; scheduler platform lock-in accepted by design |
 | Historical corpus | OneDrive Applications archive, read in place | One-time mining pass; archive stays frozen (v1.0, unchanged) |
 | Research amplifier | Gemini Deep Research output dropped into `inbox/` as a source | Agent synthesizes and cross-examines rather than trusting one source (v1.0, unchanged) |
-| Deterministic helpers | Optional small scripts (e.g., CSV validation, xlsx generation) | Code only where LLM judgment is a liability (job-sniper's scoring-engine lesson) |
+| Deterministic helpers | Optional small scripts (e.g., store consistency checks) | Code only where LLM judgment is a liability (job-sniper's scoring-engine lesson) |
 
-**Eliminated alternatives (cumulative record).** From v1.0: claude.ai Project as engine; Airtable/Notion as KB; custom API pipeline / n8n; federated multi-tool per artifact. Newly eliminated here: **xlsx as canonical store** (binary format is hostile to non-Claude agents and to git merges; see §9); **vector-database/RAG memory** (the prior Swarm/LlamaIndex prototype's approach — opaque, rebuild-to-update, embedding-provider-dependent; plain markdown is the requirement, and RAG can be layered on later *over* the files if the corpus outgrows a context window); **provider memory features** (violates Goal 1 by definition).
+**Eliminated alternatives (cumulative record).** From v1.0: claude.ai Project as engine; Airtable/Notion as KB; custom API pipeline / n8n; federated multi-tool per artifact. Newly eliminated here: **xlsx and CSV as store formats** — the "human-editable at will in native Excel" requirement that motivated a tabular store is withdrawn (Charlie surrenders routine knowledge maintenance to the agent), so the store uses markdown like the rest of the system. Note this *reinstates* the "markdown vault as KB" that v1.0 eliminated: it was rejected for failing direct-edit and relational requirements, and the first requirement no longer exists while the second is met by conventions (§9). Also eliminated: **vector-database/RAG memory** (the prior Swarm/LlamaIndex prototype's approach — opaque, rebuild-to-update, embedding-provider-dependent; RAG can be layered *over* the files later if the corpus outgrows a context window); **provider memory features** (still eliminated even though maintenance is surrendered: storing knowledge with one provider breaks Goals 1–2; the agent stores on Charlie's behalf *in Charlie's repo*).
 
 ### 5.1 Repository Layout
 
@@ -84,17 +84,15 @@ Single user: Charlie. Privacy posture: private repository; contact data never le
 │   ├── preferences.md         # durable preferences and constraints
 │   └── journal/               # dated append-only entries (from /capture and reflections)
 │
-├── store/                     # ── career data store: CSV canonical ──
-│   ├── positions.csv          # org, title, dates, type, boss(es), position_id
-│   ├── accomplishments.csv    # statement, quantified impact, position_id, theme tags
-│   ├── ip.csv                 # patents, frameworks, methods; position_id
-│   ├── people-index.csv       # structured index over people/ (see §9.2)
-│   ├── engagements.csv        # speaking, publications, panels
-│   ├── applications.csv       # company, role, date, opportunity_type, status/outcome
-│   ├── insights.csv           # the flywheel table
-│   ├── screening-qa.csv       # question bank with best-answer drafts
-│   ├── positioning-library.csv# reusable angles, phrasings, fragments that worked
-│   └── career.xlsx            # OPTIONAL generated multi-tab view (never hand-edit; regenerated)
+├── store/                     # ── career data store: agent-maintained markdown ──
+│   ├── positions.md           # one section per position: org, title, dates, type, boss(es), position_id
+│   ├── accomplishments.md     # statement, quantified impact, position_id, theme tags
+│   ├── ip.md                  # patents, frameworks, methods; position_id
+│   ├── engagements.md         # speaking, publications, panels
+│   ├── applications.md        # one section per application: company, role, date, type, status log
+│   ├── insights.md            # the flywheel log: dated, append-only
+│   ├── screening-qa.md        # question bank with best-answer drafts
+│   └── positioning-library.md # reusable angles, phrasings, fragments that worked
 │
 ├── skills/                    # ── the suite: one folder per skill, provider-neutral ──
 │   ├── setup/SKILL.md
@@ -123,11 +121,11 @@ Adopted from remix-yourself-starter v1 and extended. Every skill — current and
 1. **Read freely.** Any skill may read anything in `context/`, `people/`, `memory/`, and `store/` to personalize its output.
 2. **Write narrowly.** Each skill writes only to surfaces it owns:
    - *writer-voice* appends to `context/voice.md` under `## Learned` only.
-   - *transcription-intake* and *research* append to `people/<name>.md` under `## Notes`, create new `people/` files, and update `store/people-index.csv`.
+   - *transcription-intake* and *research* append to `people/<name>.md` under `## Notes`, create new `people/` files, and update people-file frontmatter.
    - *capture* appends to `memory/journal/`, `context/projects.md` (under existing headings), and creates `people/` files.
-   - *career-application-engine* owns `applications/`, and appends rows to `store/` tables (insights, screening-qa, positioning-library, applications, accomplishments-on-confirmation).
+   - *career-application-engine* owns `applications/`, and appends entries to `store/` files (insights, screening-qa, positioning-library, applications, accomplishments-on-confirmation).
    - *research* owns `research/`.
-3. **Append, never clobber.** Writes to shared files are additive and dated. Human-authored content is sacred. CSV writes append rows or fill empty cells; row deletion and schema changes require explicit human instruction.
+3. **Append, never clobber.** Writes to shared files are additive and dated. Human-authored content is sacred. Store writes append entries or fill placeholders under stable IDs; deleting entries or restructuring a store file requires explicit human instruction.
 4. **Self-seed if missing.** Any skill run in a fresh clone creates the minimal stubs it needs. Never fail because memory is absent.
 5. **Stub, don't assume.** Unknown values get a visible placeholder (`{add role}`), never an invented one.
 6. **Commit with readable messages.** Every skill run that changes files ends with `git add` + commit (+ push when a remote is reachable). Background jobs pull before running.
@@ -142,7 +140,7 @@ The `.compose-contract` marker records `contract: v1.1`. Remix-built or third-pa
 | **capture** | `/capture` | remix claude-skills-starter | Front-door router. Throw a thought, task, link, or name at it; it files to `memory/journal/`, `context/projects.md`, or `people/`. |
 | **writer-voice** | `/draft` | remix writer-voice | Drafts emails/letters/posts in Charlie's voice from `context/voice.md` (Rules + Samples + Learned); appends observations after edits. Used *by* the application engine for cover letters and bios. |
 | **transcription-intake** | `/process-transcript` | remix transcription-intake | Transcript in (any tool, via `inbox/`); summary + decisions + action items out, filed onto the people involved. Also runs headless (§8). |
-| **research** | `/research <topic\|company> [--brief]` | Merge of v1.0 §8 + remix researcher-meeting-prep + job-sniper depth tiers | **Quick tier** (default): tight, sourced answer to any question about a company, person, or topic; grounded in `people/` and `memory/` first, web second. **Brief tier** (`--brief`): the full fixed-template company research sheet from v1.0 §8 — business model, ownership/financials, leadership, strategy, tech/AI posture, culture, competition, risks, network overlay (via `people/` + people-index), and "angles" hooking company needs to Charlie's proof points. Ingests Gemini Deep Research files from `inbox/` as amplifying sources. Also covers meeting prep: `/research` on a person + upcoming meeting produces a pre-call brief from their `people/` history plus live web. |
+| **research** | `/research <topic\|company> [--brief]` | Merge of v1.0 §8 + remix researcher-meeting-prep + job-sniper depth tiers | **Quick tier** (default): tight, sourced answer to any question about a company, person, or topic; grounded in `people/` and `memory/` first, web second. **Brief tier** (`--brief`): the full fixed-template company research sheet from v1.0 §8 — business model, ownership/financials, leadership, strategy, tech/AI posture, culture, competition, risks, network overlay (via `people/`), and "angles" hooking company needs to Charlie's proof points. Ingests Gemini Deep Research files from `inbox/` as amplifying sources. Also covers meeting prep: `/research` on a person + upcoming meeting produces a pre-call brief from their `people/` history plus live web. |
 | **career-application-engine** | `/apply <posting>`, `/ask <question>` | PRD v1.0 §6–7, intact | The flagship. Full workflow in §7. `/ask` is the ad-hoc career-history inquiry (Goal 8) over `store/` + `memory/`. |
 
 Deliberately excluded from v1: today-planning (user decision), job discovery/alert scanning (non-goal).
@@ -153,12 +151,12 @@ Deliberately excluded from v1: today-planning (user decision), job discovery/ale
 
 1. **Intake** — Charlie supplies posting (URL, PDF, or text; or drops it in `inbox/`). Agent parses role, requirements, keywords.
 2. **Research** — invokes the *research* skill at Brief tier (or ingests an existing brief from `research/<company>/`, including Gemini output if present).
-3. **Retrieve** — queries `store/*.csv` for relevant positions, accomplishments, IP, and prior assets; queries `people/` + `people-index.csv` for network paths.
+3. **Retrieve** — queries `store/*.md` for relevant positions, accomplishments, IP, and prior assets; scans `people/` frontmatter and notes for network paths.
 4. **Draft** — generates all six work products, using the *writer-voice* skill's voice file for the cover letter and bio:
-   1. Customized CV, 2. Cover letter, 3. Relevant bio, 4. Company research sheet, 5. Network analysis, 6. Screening-question responses (seeded from `store/screening-qa.csv`).
-5. **Reflection touchpoint (human)** — agent pauses: *"Does anything in your history particularly connect you to this role?"* Answer is incorporated into drafts **and** written to `store/insights.csv`.
+   1. Customized CV, 2. Cover letter, 3. Relevant bio, 4. Company research sheet, 5. Network analysis, 6. Screening-question responses (seeded from `store/screening-qa.md`).
+5. **Reflection touchpoint (human)** — agent pauses: *"Does anything in your history particularly connect you to this role?"* Answer is incorporated into drafts **and** written to `store/insights.md`.
 6. **Revise & file** — final drafts written to `applications/<company>/`, committed.
-7. **Write-back (the flywheel)** — append rows: insights, screening questions encountered, new people (file + index row), positioning angles used. Committed with a readable message.
+7. **Write-back (the flywheel)** — append entries: insights, screening questions encountered, new `people/` files, positioning angles used. Committed with a readable message.
 8. **Review touchpoint (human)** — Charlie reviews, edits, submits himself.
 
 Human touchpoints remain exactly two (steps 5 and 8). Because step 5 requires interactivity, `/apply` is an attended skill; it is not scheduled in the background.
@@ -172,36 +170,42 @@ Human touchpoints remain exactly two (steps 5 and 8). Because step 5 requires in
 | Job | Schedule (default) | What it does |
 |---|---|---|
 | **transcript-sweep** | hourly, waking hours | Processes any new files in `inbox/transcripts/` through the *transcription-intake* skill; files summaries and people notes. |
-| **application-pulse** | daily | Revisits posting URLs for applications with status *submitted/interviewing* in `store/applications.csv`; flags vanished postings (a follow-up signal) and drafts a status note. No discovery — only positions already in the pipeline. |
-| **store-hygiene** | nightly | Validates CSV schemas/keys (deterministic script), regenerates `store/career.xlsx` view, reconciles `people-index.csv` against `people/`, commits. |
+| **application-pulse** | daily | Revisits posting URLs for applications with status *submitted/interviewing* in `store/applications.md`; flags vanished postings (a follow-up signal) and drafts a status note. No discovery — only positions already in the pipeline. |
+| **store-hygiene** | nightly | The maintenance Charlie surrendered, made routine: validates store conventions (dangling position_ids, duplicate people, malformed frontmatter, undated entries), fixes what's mechanical, flags what isn't in the weekly digest, commits. |
 | **weekly-digest** | Sunday evening | Summarizes the week's flywheel: new insights, new people, application status changes, voice learnings → one markdown digest + notification. Replaces "keep the store updated" with "read what accumulated." |
 
 **Model routing (job-sniper's lesson):** background jobs and parsing run on the cheapest adequate model (Haiku-class); interactive research/drafting on a mid-tier model (Sonnet-class); Deep briefs for top-priority targets may use a top-tier model. Routing is a per-job/per-skill setting in the skill file, editable like everything else.
 
 ## 9. Data Store Design (the one material change from v1.0)
 
-### 9.1 CSV canonical, xlsx generated
+### 9.1 Markdown everywhere; maintenance surrendered to the agent
 
-v1.0 chose `career.xlsx` as canonical with agent-exported CSVs for diffability. This PRD inverts that: **the CSVs are canonical; the workbook is a generated, read-only convenience view.**
+v1.0 chose `career.xlsx` as canonical because of one requirement: the store had to be *co-owned* — agent-built but "human-editable at will in native Excel." That requirement is now withdrawn: **Charlie surrenders all routine knowledge maintenance to the agent.** With direct spreadsheet editing gone, no reason remains for xlsx or even CSV, and the store uses the same format as the rest of the system: plain markdown, maintained entirely by skills under the §5.2 contract.
 
-Rationale, driven by the new multi-runtime requirement:
-- **Any agent can read/write CSV with plain file tools.** xlsx requires a library and invites silent corruption from non-Claude agents (Goal 2 would otherwise quietly re-lock the system to one runtime).
-- **Git-native.** CSV diffs and merges work; binary xlsx conflicts are unrecoverable (v1.0 open question #17 dissolves).
-- **Co-ownership is preserved.** Excel opens and edits a CSV directly — the "open in native Excel and edit at will" requirement survives; only multi-tab browsing moves to the generated workbook. The nightly *store-hygiene* job regenerates `career.xlsx` so a fresh browsable view always exists.
-- Cross-keying (position_id as spine), table set, and seed sources are unchanged from v1.0 §9.
+What survives from the relational design (this is what made v1.0 reject a naive markdown vault, and it is kept deliberately):
+- **Stable IDs.** `position_id` remains the spine. Every position gets an anchor ID in its section heading; accomplishments, IP, and insights reference it. IDs are assigned by the agent, never reused.
+- **Controlled vocabularies.** Theme tags (e.g., *post-acquisition integration*, *Agile transformation*) come from a documented tag list in the store, so retrieval is consistent across years of entries.
+- **One file per domain, one section per entity, dated append-only logs** for insights and application status. Structured fields live in a compact key-value block per entity (and YAML frontmatter for people files), so any agent can parse them without a library.
+- **Enforced integrity.** The nightly *store-hygiene* job validates the conventions (dangling IDs, duplicates, missing dates) — referential integrity by janitor rather than by file format.
 
-*Preserved alternative:* if editing CSVs in Excel proves unacceptable in practice, revert to xlsx-canonical with per-commit CSV export (v1.0 design) — the table schemas are identical either way, so the switch is mechanical.
+At single-user scale — dozens of positions, hundreds of accomplishments and people — the whole store fits comfortably in a model's context, so "relational queries" are simply reads. If the store someday outgrows that, the escape hatches (a generated tabular index, or embeddings *over* the markdown) layer on without changing the canonical files.
 
-### 9.2 People: markdown canonical, CSV index
+**Custody vs. maintenance — the line that does not move:** surrendering maintenance does not mean surrendering the data to an AI provider's memory feature. The agent stores knowledge *on Charlie's behalf, in Charlie's repo*. Provider-side memory remains eliminated because it would break multi-runtime invocation (Goal 2) and provider independence (Goal 1). Everything stays plain text: readable, auditable, git-versioned, and editable by Charlie whenever he wants — he just never *has* to.
 
-v1.0's People *table* and the compose contract's `people/` *folder* merge:
-- `people/<name>.md` is the canonical record — relationship, context, and the append-only `## Notes` history that transcripts, research, and applications feed.
-- `store/people-index.csv` is an agent-maintained structured index (name, file path, company, relationship, source, last-touched) so the career engine's network analysis can scan structurally without opening every file. The *store-hygiene* job keeps it consistent.
-- The LinkedIn export CSV seeds the index at bootstrap and remains a raw source in `inbox/`, refreshed quarterly.
+### 9.2 People: markdown files, no index
+
+v1.0's People *table* and the compose contract's `people/` *folder* merge into one thing:
+- `people/<name>.md` is the sole canonical record — YAML frontmatter for structured fields (name, company, relationship, context met, last-touched), plus the append-only `## Notes` history that transcripts, research, and applications feed.
+- Network analysis scans frontmatter across `people/` directly; no separate index file to keep in sync.
+- The LinkedIn export seeds `people/` at bootstrap and remains a raw source in `inbox/`, refreshed quarterly.
+
+### 9.3 Seed sources (unchanged from v1.0)
+
+The three existing files (CV + variants; intro/audience summaries doc; lists Excel), the OneDrive archive mined in place, and the LinkedIn data extract.
 
 ## 10. Non-Functional Requirements
 
-- **Co-ownership:** agent performs all routine maintenance; Charlie can open/edit/commit at will. One required habit: pull before editing (background jobs also pull before running).
+- **Custody without maintenance:** the agent performs *all* knowledge maintenance; Charlie may read or edit anything at will (it's plain text in his repo) but is never required to. One required habit: pull before editing (background jobs also pull before running).
 - **Consistency:** work-product templates and skill prompts are versioned in the repo; template changes are visible in git history; same template + same data = same result.
 - **Portability:** a skill must produce correct output when executed by any capable agent given only the repo contents. Provider-specific syntax lives only in adapter files (`.claude/`, wrappers).
 - **Privacy:** private repo; People data treated as sensitive; secrets only in `.env`; background job logs contain no secrets.
@@ -219,12 +223,12 @@ v1.0's People *table* and the compose contract's `people/` *folder* merge:
 
 ## 12. Outstanding Questions (Handoff List for Spec Workstreams)
 
-**Workstream A — Data store spec** *(v1.0 items 1–5 carry over, plus:)*
-1. Final CSV schemas: fields, keys, controlled vocabularies (theme tags), per table; quoting/encoding conventions for safe hand-editing.
-2. `people-index.csv` field set and the sync rules against `people/` files.
+**Workstream A — Data store spec** *(v1.0 items 1–5 carry over, adapted to markdown:)*
+1. Final store conventions per domain file: section/heading format, entity ID scheme, key-value field blocks, controlled tag vocabulary, date format.
+2. `people/` frontmatter schema and the person-matching rules (name collisions, nicknames, case).
 3. Bootstrap scope: which of the ~115 archive folders to mine; handling image/PDF-heavy folders.
 4. LinkedIn re-export before seeding.
-5. Application status-history depth, and whether *application-pulse* may update status rows autonomously or only draft proposed changes.
+5. Application status-history depth, and whether *application-pulse* may update status entries autonomously or only draft proposed changes.
 
 **Workstream B — Research spec** *(v1.0 items 6–8 carry over, plus:)*
 6. Final Brief-tier template sections and depth; Quick-tier output format.
@@ -250,7 +254,7 @@ v1.0's People *table* and the compose contract's `people/` *folder* merge:
 
 **Phase 2 — Scaffold + contract (sequential after 0; concurrent with 1).** Build the §5.1 skeleton: folders, `.compose-contract`, `AGENTS.md`, `CLAUDE.md`, command adapters, and stub SKILL.md files that execute end-to-end with placeholder output. *Done when: `/setup` runs and seeds `context/` + `memory/` stubs.*
 
-**Phase 3 — Onboard + bootstrap the store (requires A-spec + Phase 2).** Run `/setup` for the interview-driven seeding of `context/` and `memory/`. Then the big value step: ingest the three source files, mine the OneDrive archive in place, ingest the LinkedIn CSV, and construct the `store/` CSVs (+ generated workbook). Charlie does one structured review pass — review, not data entry. *Done when: Charlie signs off on the store and it's committed.*
+**Phase 3 — Onboard + bootstrap the store (requires A-spec + Phase 2).** Run `/setup` for the interview-driven seeding of `context/` and `memory/`. Then the big value step: ingest the three source files, mine the OneDrive archive in place, ingest the LinkedIn CSV, and construct the `store/` markdown files per the Workstream A conventions. Charlie does one structured review pass — review, not data entry, and the last maintenance he is ever asked to do. *Done when: Charlie signs off on the store and it's committed.*
 
 **Phase 4 — Light skills (concurrent with Phase 3).** Build *capture*, *writer-voice*, and *transcription-intake* — none depend on the career store. Seed `context/voice.md` with real samples. These deliver daily value immediately and start feeding `people/` before the engine exists. *Done when: a real transcript files correctly and a `/draft` passes the "sounds like me" test.*
 
@@ -260,7 +264,7 @@ v1.0's People *table* and the compose contract's `people/` *folder* merge:
 
 **Phase 7 — Background automation (after Phases 4–6 as each job's skill lands).** Install wrappers + scheduler definitions for the four §8 jobs, starting with *store-hygiene* and *transcript-sweep*. *Done when: a week of scheduled runs completes with clean logs and commits.*
 
-**Phase 8 — Multi-endpoint + multi-runtime hardening (concurrent with 7).** Clone to machine 2; verify pull-edit-commit round trips on the CSVs; test phone kick-off of `/research`; run one skill end-to-end from a non-Claude agent via `AGENTS.md` (portability proof). *Done when: a run started on machine 2, phone, or a second runtime lands cleanly in the repo.*
+**Phase 8 — Multi-endpoint + multi-runtime hardening (concurrent with 7).** Clone to machine 2; verify pull-edit-commit round trips on the store files; test phone kick-off of `/research`; run one skill end-to-end from a non-Claude agent via `AGENTS.md` (portability proof). *Done when: a run started on machine 2, phone, or a second runtime lands cleanly in the repo.*
 
 **Phase 9 — Pilot + steady state.** Run 2–3 live applications end-to-end; measure attention-minutes, insights captured, and manual corrections (each correction is a template or store fix, not a one-off edit). Then: use for every application; read the weekly digest instead of maintaining the store; refresh the LinkedIn export quarterly.
 
