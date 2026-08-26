@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.life-os.transcript-sweep</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/ABSOLUTE/PATH/TO/life-os/automation/run-job.sh</string>
+    <string>transcript-sweep</string>
+  </array>
+  <key>StartInterval</key><integer>3600</integer>
+  <key>WorkingDirectory</key><string>/ABSOLUTE/PATH/TO/life-os</string>
+  <key>StandardErrorPath</key><string>/tmp/com.life-os.transcript-sweep.err</string>
+</dict>
+</plist>
