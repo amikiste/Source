@@ -1,0 +1,7 @@
+contract: v1.1
+
+# v1.1 (2026-08): remix-yourself-starter v1 contract (context/ + people/, five rules)
+#   extended with: memory/ (background, preferences, journal), store/ (career KB
+#   with stable-ID entities per specs/store-conventions.md), and rule 6 (commit
+#   with readable messages). v1 components remain compatible; they ignore the
+#   added surfaces.
